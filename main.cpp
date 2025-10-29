@@ -81,7 +81,7 @@ bool Renderer::Initialize() {
     device = adapter->requestDevice(devDesc);
     wgpuDeviceSetUncapturedErrorCallback(*device, onDeviceError, nullptr /* pUserData */);
     
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+    //glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
     if (!glfwInit()) {
     std::cerr << "Could not initialize GLFW!" << std::endl;
         return false;
@@ -152,9 +152,6 @@ void Renderer::MainLoop(){
     CommandBuffer command = encoder.finish(cmdBufferDescriptor);
     queue->submit(1, &command);
     surface->present();
-    
-    //targetView->release();
-    instance->processEvents();
 }
 bool Renderer::IsRunning(){
     return !glfwWindowShouldClose(window);
