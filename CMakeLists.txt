@@ -5,12 +5,12 @@ project(
     LANGUAGES CXX C # programming languages used by the project
 )
 
-add_executable(App main.cpp webgpu-raii.hpp)
+add_executable(Renderer main.cpp webgpu-raii.hpp)
 add_subdirectory(glfw)
 add_subdirectory(glfw3webgpu)
 add_subdirectory(webgpu)
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
-set_target_properties(App PROPERTIES
+target_link_libraries(Renderer PRIVATE glfw webgpu glfw3webgpu)
+set_target_properties(Renderer PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
