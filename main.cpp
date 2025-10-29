@@ -81,7 +81,9 @@ bool Renderer::Initialize() {
     device = adapter->requestDevice(devDesc);
     wgpuDeviceSetUncapturedErrorCallback(*device, onDeviceError, nullptr /* pUserData */);
     
-    //glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+    #ifdef __linux__
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+    #endif
     if (!glfwInit()) {
     std::cerr << "Could not initialize GLFW!" << std::endl;
         return false;
