@@ -5,7 +5,7 @@ project(
     LANGUAGES CXX C # programming languages used by the project
 )
 
-add_executable(App main.cpp)
+add_executable(App main.cpp webgpu-raii.hpp)
 add_subdirectory(glfw)
 add_subdirectory(glfw3webgpu)
 add_subdirectory(webgpu)

@@ -1,6 +1,6 @@
 #include <iostream>
 #define WEBGPU_CPP_IMPLEMENTATION
-#include <webgpu/webgpu.hpp>
+#include "webgpu-raii.hpp"
 #include <cassert>
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
@@ -15,37 +15,48 @@ public:
     bool IsRunning();
 
 private:
-    WGPUInstance instance;
-    WGPUDevice device;
+    raii::Instance instance;
+    raii::Device device;
     GLFWwindow* window;
-    WGPUSurface surface;
-    WGPUSurfaceConfiguration config;
-    WGPUQueue queue;
-    RenderPipeline pipeline;
+    raii::Surface surface;
+    raii::Queue queue;
+    raii::RenderPipeline pipeline;
     TextureFormat surfaceFormat = TextureFormat::Undefined;
 
     void InitializePipeline();
-    WGPUDevice requestDeviceSync(WGPUAdapter adapter, WGPUDeviceDescriptor const* descriptor);
-    WGPUAdapter requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions const * options);
-    std::pair<WGPUSurfaceTexture, WGPUTextureView> GetNextSurfaceViewData();
-    void DrawTriangle();
+    std::pair<SurfaceTexture, raii::TextureView> GetNextSurfaceViewData();
+    void InitializeTexture();
+};
+
+auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
+        std::cout << "Uncaptured device error: type " << type;
+        if (message) std::cout << " (" << message << ")";
+        std::cout << std::endl;
 };
 
 bool App::Initialize() {
     // instance
-    WGPUInstanceDescriptor desc = {};
+    InstanceDescriptor desc = {};
     desc.nextInChain = nullptr;
-    instance = wgpuCreateInstance(&desc);
+    instance = createInstance(desc);
     if (!instance) {
         std::cerr << "Could not initialize WebGPU!" << std::endl;
         return false;
     }
     // adapter
-    WGPURequestAdapterOptions options = {};
-    bool requestEnded = false;
-    WGPUAdapter adapter = requestAdapterSync(instance, &options);
-    WGPUDeviceDescriptor devDesc = {};
-    device = requestDeviceSync(adapter, &devDesc);
+    RequestAdapterOptions options = {};
+    raii::Adapter adapter = instance->requestAdapter(options);
+
+    // device
+    DeviceDescriptor devDesc = {};
+    devDesc.deviceLostCallback = [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */) {
+    std::cout << "Device lost: reason " << reason;
+    if (message) std::cout << " (" << message << ")";
+    std::cout << std::endl;
+    };
+    device = adapter->requestDevice(devDesc);
+    wgpuDeviceSetUncapturedErrorCallback(*device, onDeviceError, nullptr /* pUserData */);
+    
     glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
     if (!glfwInit()) {
     std::cerr << "Could not initialize GLFW!" << std::endl;
@@ -53,163 +64,169 @@ bool App::Initialize() {
     }
     window = glfwCreateWindow(640, 480, "Learn WebGPU", nullptr, nullptr);
     if (!window) {
-        std::cerr << "Could not open window!" << std::endl;
-        glfwTerminate();
-        return 1;
+    std::cerr << "Could not open window!" << std::endl;
+    glfwTerminate();
+    return 1;
     }
     // surface
-    surface = glfwGetWGPUSurface(instance, window);
-    config = {};
+    *surface = glfwGetWGPUSurface(*instance, window);
+    SurfaceConfiguration config = {};
     config.nextInChain = nullptr;
     config.width = 640;
     config.height = 480;
-    WGPUTextureFormat format = wgpuSurfaceGetPreferredFormat(surface, adapter);
-    config.format = format;
+    surfaceFormat = surface->getPreferredFormat(*adapter);
+    config.format = surfaceFormat;
     config.viewFormatCount = 0;
     config.viewFormats = nullptr;
     config.usage = WGPUTextureUsage_RenderAttachment;
-    config.device = device;
+    config.device = *device;
     config.presentMode = WGPUPresentMode_Fifo;
     config.alphaMode = WGPUCompositeAlphaMode_Auto;
-    wgpuSurfaceConfigure(surface, &config);
+    surface->configure(config);
     // queue
-    queue = wgpuDeviceGetQueue(device);
-
-    wgpuAdapterRelease(adapter);
+    queue = device->getQueue();
+    InitializePipeline();
     return true;
 }
 void App::Terminate(){
-    pipeline.release();
-    wgpuInstanceRelease(instance);
     glfwDestroyWindow(window);
     glfwTerminate();
-    wgpuSurfaceUnconfigure(surface);
-    wgpuSurfaceRelease(surface);
-    wgpuDeviceRelease(device);
-    wgpuQueueRelease(queue);
 }
 void App::MainLoop(){
     glfwPollEvents();
     auto [ surfaceTexture, targetView ] = GetNextSurfaceViewData();
     if (!targetView) return;
-    WGPURenderPassDescriptor renderPassDesc = {};
+    RenderPassDescriptor renderPassDesc = {};
     renderPassDesc.nextInChain = nullptr;
     // describe render pass
-    WGPURenderPassColorAttachment renderPassColorAttachment = {};
-    renderPassColorAttachment.view = targetView;
+    RenderPassColorAttachment renderPassColorAttachment = {};
+    renderPassColorAttachment.view = *targetView;
     renderPassColorAttachment.resolveTarget = nullptr;
     renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
     renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-    renderPassColorAttachment.clearValue = WGPUColor{ 0.6, 0.4, 1.0, 1.0 };
+    renderPassColorAttachment.clearValue = Color{ 0.6, 0.4, 1.0, 1.0 };
     renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
     renderPassDesc.colorAttachmentCount = 1;
     renderPassDesc.colorAttachments = &renderPassColorAttachment;
     renderPassDesc.depthStencilAttachment = nullptr;
     renderPassDesc.timestampWrites = nullptr;
     // encoder
-    WGPUCommandEncoderDescriptor encoderDesc = {};
+    CommandEncoderDescriptor encoderDesc = {};
     encoderDesc.nextInChain = nullptr;
     encoderDesc.label = "My command encoder";
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+    CommandEncoder encoder = device->createCommandEncoder(encoderDesc);
     // render pass
-    WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
-    wgpuRenderPassEncoderEnd(renderPass);
-    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+    RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+    renderPass.setPipeline(*pipeline);
+    renderPass.draw(3, 1, 0, 0);
+    renderPass.end();
+    CommandBufferDescriptor cmdBufferDescriptor = {};
     cmdBufferDescriptor.nextInChain = nullptr;
     cmdBufferDescriptor.label = "Command buffer";
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+    CommandBuffer command = encoder.finish(cmdBufferDescriptor);
     // std::cout << "Submitting command..." << std::endl;
-    wgpuQueueSubmit(queue, 1, &command);
+    queue->submit(1, &command);
     // std::cout << "Command submitted." << std::endl;
 
-    wgpuRenderPassEncoderRelease(renderPass);
-    wgpuSurfacePresent(surface);
-    wgpuTextureViewRelease(targetView);
+    renderPass.release();
+    surface->present();
+    targetView->release();
     wgpuTextureRelease(surfaceTexture.texture);
-    wgpuCommandBufferRelease(command);
-    wgpuCommandEncoderRelease(encoder);
-    wgpuInstanceProcessEvents(instance);
+    command.release();
+    encoder.release();
+    instance->processEvents();
 }
 bool App::IsRunning(){
     return !glfwWindowShouldClose(window);
-}
-WGPUDevice App::requestDeviceSync(WGPUAdapter adapter, WGPUDeviceDescriptor const* descriptor){
-    struct UserData {
-        WGPUDevice device = nullptr;
-        bool requestEnded = false;
-    };
-    UserData userData;
-    auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* pUserData) {
-        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == WGPURequestDeviceStatus_Success) {
-            userData.device = device;
-        } else {
-            std::cout << "Could not get WebGPU device: " << message << std::endl;
-        }
-        userData.requestEnded = true;
-    };
-
-    wgpuAdapterRequestDevice(adapter, descriptor, onDeviceRequestEnded, (void*)&userData);
-
-    assert(userData.requestEnded);
-    return userData.device;
 } 
-WGPUAdapter App::requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions const * options) {
-
-    struct UserData {
-        WGPUAdapter adapter = nullptr;
-        bool requestEnded = false;
-    };
-    UserData userData;
-    auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) {
-        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == WGPURequestAdapterStatus_Success) {
-            userData.adapter = adapter;
-        } else {
-            std::cout << "Could not get WebGPU adapter: " << message << std::endl;
-        }
-        userData.requestEnded = true;
-    };
-
-    // Call to the WebGPU request adapter procedure
-    wgpuInstanceRequestAdapter(
-        instance /* equivalent of navigator.gpu */,
-        options,
-        onAdapterRequestEnded,
-        (void*)&userData
-    );
-
-    // We wait until userData.requestEnded gets true
-    assert(userData.requestEnded);
-
-    return userData.adapter;
-}
-std::pair<WGPUSurfaceTexture, WGPUTextureView> App::GetNextSurfaceViewData() {
-    // nextTexture
-    WGPUSurfaceTexture surfaceTexture;
-    wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
+std::pair<SurfaceTexture, raii::TextureView> App::GetNextSurfaceViewData() {
+    // next texture
+    SurfaceTexture surfaceTexture;
+    surface->getCurrentTexture(&surfaceTexture);
     if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) {
-        return { surfaceTexture, nullptr };
+        return { surfaceTexture, raii::TextureView() };
     }
-    // surfaceTextureView
-    WGPUTextureViewDescriptor viewDescriptor;
+    // surface texture view
+    TextureViewDescriptor viewDescriptor;
     viewDescriptor.nextInChain = nullptr;
     viewDescriptor.label = "Surface texture view";
-    viewDescriptor.format = wgpuTextureGetFormat(surfaceTexture.texture);
+    raii::Texture tex = Texture(surfaceTexture.texture);
+    viewDescriptor.format = tex->getFormat();
     viewDescriptor.dimension = WGPUTextureViewDimension_2D;
     viewDescriptor.baseMipLevel = 0;
     viewDescriptor.mipLevelCount = 1;
     viewDescriptor.baseArrayLayer = 0;
     viewDescriptor.arrayLayerCount = 1;
     viewDescriptor.aspect = WGPUTextureAspect_All;
-    WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
+    raii::TextureView targetView = tex->createView(viewDescriptor);
     return { surfaceTexture, targetView };
 }
 void App::InitializePipeline(){
-    // RenderPipelineDescriptor pipelineDesc;
-    // pipeline = createRenderPipeline(pipelineDesc);
+    const char* shaderSource = R"(
+    @vertex
+    fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+    @fragment
+    fn fs_main() -> @location(0) vec4f {
+        return vec4f(0.0, 0.0, 0.0, 1.0);
+    }
+    )";
+    // create shader module
+    ShaderModuleDescriptor shaderDesc;
+    ShaderModuleWGSLDescriptor shaderCodeDesc;
+    shaderCodeDesc.chain.next = nullptr;
+    shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+    shaderCodeDesc.code = shaderSource;
+    shaderDesc.nextInChain = &shaderCodeDesc.chain;
+    ShaderModule shaderModule = device->createShaderModule(shaderDesc);
+
+    // pipeline
+    RenderPipelineDescriptor pipelineDesc;
+    pipelineDesc.label = "Pipeline";
+    pipelineDesc.vertex.bufferCount = 0;
+    pipelineDesc.vertex.buffers = nullptr;
+    // vertex shader
+    pipelineDesc.vertex.module = shaderModule;
+    pipelineDesc.vertex.entryPoint = "vs_main";
+    pipelineDesc.vertex.constantCount = 0;
+    pipelineDesc.vertex.constants = nullptr;
+    pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
+    pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
+    pipelineDesc.primitive.frontFace = FrontFace::CCW;
+    pipelineDesc.primitive.cullMode = CullMode::None;
+    // fragment shader
+    FragmentState fragmentState;
+    fragmentState.module = shaderModule;
+    fragmentState.entryPoint = "fs_main";
+    fragmentState.constantCount = 0;
+    fragmentState.constants = nullptr;
+    // blending
+    BlendState blendState;
+    blendState.color.srcFactor = BlendFactor::SrcAlpha;
+    blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
+    blendState.color.operation = BlendOperation::Add;
+    blendState.alpha.srcFactor = BlendFactor::Zero;
+    blendState.alpha.dstFactor = BlendFactor::One;
+    blendState.alpha.operation = BlendOperation::Add;
+    ColorTargetState colorTarget;
+    colorTarget.format = surfaceFormat;
+    colorTarget.blend = &blendState;
+    colorTarget.writeMask = ColorWriteMask::All;
+    fragmentState.targetCount = 1;
+    fragmentState.targets = &colorTarget;
+    pipelineDesc.fragment = &fragmentState;
+    pipelineDesc.depthStencil = nullptr;
+    // multisampling
+    pipelineDesc.multisample.count = 1;
+    pipelineDesc.multisample.mask = ~0u;
+    pipelineDesc.multisample.alphaToCoverageEnabled = false;
+
+    pipelineDesc.layout = nullptr;
+
+    pipeline = device->createRenderPipeline(pipelineDesc);
 }
-void App::DrawTriangle(){
+void App::InitializeTexture(){
 
 }
 
