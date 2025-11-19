@@ -219,11 +219,23 @@ void Renderer::InitializePipeline(){
         std::cerr << "Could not load shader!" << std::endl;
         exit(1);
     }
+    // vertex buffer layout
+    VertexBufferLayout vertexBufferLayout;
+    VertexAttribute vertexAttrib;
+    // position
+    vertexAttrib.shaderLocation = 0;
+    vertexAttrib.offset = 0;
+    vertexAttrib.format = VertexFormat::Float32x2;
+    // colors
+    vertexBufferLayout.attributeCount = 1;
+    vertexBufferLayout.attributes = &vertexAttrib;
+    vertexBufferLayout.arrayStride = 2 * sizeof(float);
+    vertexBufferLayout.stepMode = VertexStepMode::Vertex;
     // pipeline
     RenderPipelineDescriptor pipelineDesc;
     pipelineDesc.label = "Pipeline";
-    pipelineDesc.vertex.bufferCount = 0;
-    pipelineDesc.vertex.buffers = nullptr;
+    pipelineDesc.vertex.bufferCount = 1;
+    pipelineDesc.vertex.buffers = &vertexBufferLayout;
     // vertex shader
     pipelineDesc.vertex.module = shaderModule;
     pipelineDesc.vertex.entryPoint = "vs_main";
