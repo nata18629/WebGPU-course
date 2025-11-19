@@ -53,6 +53,7 @@ private:
     raii::RenderPipeline pipeline;
     TextureFormat surfaceFormat = TextureFormat::Undefined;
     std::vector<VertexData> vertexData;
+    uint32_t vertexCount;
 
     void InitializeBuffers();
     void InitializePipeline();
@@ -200,6 +201,7 @@ void Renderer::InitializeBuffers() {
 
         {position:{-0.1, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}},
     };
+    vertexCount = static_cast<int>(vertexData.size());
 }
 void Renderer::InitializePipeline(){
     // create shader module
