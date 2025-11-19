@@ -155,7 +155,8 @@ void Renderer::MainLoop(){
     // render pass
     raii::RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
     renderPass->setPipeline(*pipeline);
-    renderPass->draw(3, 1, 0, 0);
+    renderPass->setVertexBuffer(0, *vertexBuffer, 0, vertexBuffer->getSize());
+    renderPass->draw(vertexCount, 1, 0, 0);
     renderPass->end();
     CommandBufferDescriptor cmdBufferDescriptor = {};
     cmdBufferDescriptor.nextInChain = nullptr;
