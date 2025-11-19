@@ -54,7 +54,8 @@ private:
     TextureFormat surfaceFormat = TextureFormat::Undefined;
     raii::Buffer vertexBuffer;
     std::vector<VertexData> vertexData;
-    uint32_t vertexCount;
+    std::vector<uint32_t> indexData;
+    uint32_t vertexCount, indexCount;
 
     void InitializeBuffers();
     void InitializePipeline();
@@ -212,6 +213,14 @@ void Renderer::InitializeBuffers() {
     bufferDesc.mappedAtCreation = false;
     vertexBuffer = device->createBuffer(bufferDesc);
     queue->writeBuffer(*vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+
+    indexData = {
+        0, 1, 2,
+        3, 4, 5,
+        0, 6, 2,
+    };
+
+    indexCount = static_cast<int>(indexData.size());
 }
 void Renderer::InitializePipeline(){
     // create shader module
