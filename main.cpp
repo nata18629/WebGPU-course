@@ -11,6 +11,11 @@
 
 using namespace wgpu;
 
+struct VertexData {
+    std::array<float,2> position;
+    std::array<float,4> color;
+};
+
 ShaderModule loadShaderModule(const std::filesystem::path& path, Device device) {
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -47,6 +52,7 @@ private:
     raii::Queue queue;
     raii::RenderPipeline pipeline;
     TextureFormat surfaceFormat = TextureFormat::Undefined;
+    std::vector<VertexData> vertexData;
 
     void InitializePipeline();
     std::pair<SurfaceTexture, raii::TextureView> GetNextSurfaceViewData();
