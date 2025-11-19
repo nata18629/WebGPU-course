@@ -54,6 +54,7 @@ private:
     TextureFormat surfaceFormat = TextureFormat::Undefined;
     std::vector<VertexData> vertexData;
 
+    void InitializeBuffers();
     void InitializePipeline();
     std::pair<SurfaceTexture, raii::TextureView> GetNextSurfaceViewData();
 };
@@ -186,6 +187,19 @@ std::pair<SurfaceTexture, raii::TextureView> Renderer::GetNextSurfaceViewData() 
     raii::TextureView targetView = tex->createView(viewDescriptor);
     
     return { surfaceTexture, targetView };
+}
+void Renderer::InitializeBuffers() {
+    vertexData = {
+        {position:{+0.8, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}},
+        {position:{+0.4, +0.7},     color:{+0.5, +0.1, +0.3, +1.0}}, 
+        {position:{+0.4, +0.3},     color:{+0.5, +0.1, +0.1, +1.0}}, 
+
+        {position:{+0.8, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}}, 
+        {position:{+0.8, +0.3},     color:{+0.0, +0.1, +0.1, +1.0}}, 
+        {position:{+0.4, +0.3},     color:{+0.5, +0.1, +0.1, +1.0}}, 
+
+        {position:{-0.1, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}},
+    };
 }
 void Renderer::InitializePipeline(){
     // create shader module
