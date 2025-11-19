@@ -52,7 +52,7 @@ private:
     raii::Queue queue;
     raii::RenderPipeline pipeline;
     TextureFormat surfaceFormat = TextureFormat::Undefined;
-    raii::Buffer vertexBuffer;
+    raii::Buffer vertexBuffer, indexBuffer;
     std::vector<VertexData> vertexData;
     std::vector<uint32_t> indexData;
     uint32_t vertexCount, indexCount;
@@ -221,6 +221,13 @@ void Renderer::InitializeBuffers() {
     };
 
     indexCount = static_cast<int>(indexData.size());
+
+    bufferDesc.label = "index data";
+    bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
+    bufferDesc.size = indexData.size() * sizeof(uint32_t);
+    bufferDesc.mappedAtCreation = false;
+    indexBuffer = device->createBuffer(bufferDesc);
+    queue->writeBuffer(*indexBuffer, 0, indexData.data(), bufferDesc.size);
 }
 void Renderer::InitializePipeline(){
     // create shader module
