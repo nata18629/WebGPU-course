@@ -52,6 +52,7 @@ private:
     raii::Queue queue;
     raii::RenderPipeline pipeline;
     TextureFormat surfaceFormat = TextureFormat::Undefined;
+    raii::Buffer vertexBuffer;
     std::vector<VertexData> vertexData;
     uint32_t vertexCount;
 
@@ -202,6 +203,14 @@ void Renderer::InitializeBuffers() {
         {position:{-0.1, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}},
     };
     vertexCount = static_cast<int>(vertexData.size());
+
+    BufferDescriptor bufferDesc;
+    bufferDesc.label = "vertex data";
+    bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+    bufferDesc.size = vertexData.size()*6 * sizeof(float);
+    bufferDesc.mappedAtCreation = false;
+    vertexBuffer = device->createBuffer(bufferDesc);
+    queue->writeBuffer(*vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 }
 void Renderer::InitializePipeline(){
     // create shader module
