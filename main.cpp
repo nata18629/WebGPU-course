@@ -123,6 +123,7 @@ bool Renderer::Initialize() {
     surface->configure(config);
     // queue
     queue = device->getQueue();
+    InitializeBuffers();
     InitializePipeline();
     return true;
 }
@@ -157,7 +158,8 @@ void Renderer::MainLoop(){
     raii::RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
     renderPass->setPipeline(*pipeline);
     renderPass->setVertexBuffer(0, *vertexBuffer, 0, vertexBuffer->getSize());
-    renderPass->draw(vertexCount, 1, 0, 0);
+    renderPass->setIndexBuffer(*indexBuffer, IndexFormat::Uint32, 0, indexBuffer->getSize());
+    renderPass->drawIndexed(indexCount, 1, 0, 0, 0);
     renderPass->end();
     CommandBufferDescriptor cmdBufferDescriptor = {};
     cmdBufferDescriptor.nextInChain = nullptr;
@@ -209,7 +211,7 @@ void Renderer::InitializeBuffers() {
     BufferDescriptor bufferDesc;
     bufferDesc.label = "vertex data";
     bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
-    bufferDesc.size = vertexData.size()*6 * sizeof(float);
+    bufferDesc.size = vertexData.size()*sizeof(VertexData);
     bufferDesc.mappedAtCreation = false;
     vertexBuffer = device->createBuffer(bufferDesc);
     queue->writeBuffer(*vertexBuffer, 0, vertexData.data(), bufferDesc.size);
@@ -238,15 +240,18 @@ void Renderer::InitializePipeline(){
     }
     // vertex buffer layout
     VertexBufferLayout vertexBufferLayout;
-    VertexAttribute vertexAttrib;
+    std::vector<VertexAttribute> vertexAttribs(2);
     // position
-    vertexAttrib.shaderLocation = 0;
-    vertexAttrib.offset = 0;
-    vertexAttrib.format = VertexFormat::Float32x2;
+    vertexAttribs[0].shaderLocation = 0;
+    vertexAttribs[0].offset = 0;
+    vertexAttribs[0].format = VertexFormat::Float32x2;
     // colors
-    vertexBufferLayout.attributeCount = 1;
-    vertexBufferLayout.attributes = &vertexAttrib;
-    vertexBufferLayout.arrayStride = 2 * sizeof(float);
+    vertexAttribs[1].shaderLocation = 1;
+    vertexAttribs[1].offset = 2 * sizeof(float);
+    vertexAttribs[1].format = VertexFormat::Float32x4;
+    vertexBufferLayout.attributeCount = vertexAttribs.size();
+    vertexBufferLayout.attributes = vertexAttribs.data();
+    vertexBufferLayout.arrayStride = 6 * sizeof(float);
     vertexBufferLayout.stepMode = VertexStepMode::Vertex;
     // pipeline
     RenderPipelineDescriptor pipelineDesc;
