@@ -46,24 +46,6 @@
 #include <emscripten.h>
 #endif
 
-#ifdef _MSVC_LANG
-#  if _MSVC_LANG >= 202002L
-#   define NO_DISCARD [[nodiscard("You should keep this handle alive for as long as the callback may get invoked.")]]
-#  elif _MSVC_LANG >= 201703L
-#   define NO_DISCARD [[nodiscard]]
-#  else
-#   define NO_DISCARD
-#  endif
-#else
-#  if __cplusplus >= 202002L
-#    define NO_DISCARD [[nodiscard("You should keep this handle alive for as long as the callback may get invoked.")]]
-#  elif __cplusplus >= 201703L
-#    define NO_DISCARD [[nodiscard]]
-#  else
-#    define NO_DISCARD
-#  endif
-#endif
-
 /**
  * A namespace providing a more C++ idiomatic API to WebGPU.
  */
@@ -77,7 +59,6 @@ class Type { \
 public: \
 	typedef Type S; /* S == Self */ \
 	typedef WGPU ## Type W; /* W == WGPU Type */ \
-	Type() : m_raw(nullptr) {} \
 	Type(const W& w) : m_raw(w) {} \
 	operator W&() { return m_raw; } \
 	operator const W&() const { return m_raw; } \
@@ -1033,7 +1014,7 @@ HANDLE(Adapter)
 	Bool getLimits(SupportedLimits * limits);
 	void getProperties(AdapterProperties * properties);
 	Bool hasFeature(FeatureName feature);
-	NO_DISCARD std::unique_ptr<RequestDeviceCallback> requestDevice(const DeviceDescriptor& descriptor, RequestDeviceCallback&& callback);
+	std::unique_ptr<RequestDeviceCallback> requestDevice(const DeviceDescriptor& descriptor, RequestDeviceCallback&& callback);
 	void reference();
 	void release();
 	Device requestDevice(const DeviceDescriptor& descriptor);
@@ -1058,7 +1039,7 @@ HANDLE(Buffer)
 	void * getMappedRange(size_t offset, size_t size);
 	uint64_t getSize();
 	BufferUsageFlags getUsage();
-	NO_DISCARD std::unique_ptr<BufferMapCallback> mapAsync(MapModeFlags mode, size_t offset, size_t size, BufferMapCallback&& callback);
+	std::unique_ptr<BufferMapCallback> mapAsync(MapModeFlags mode, size_t offset, size_t size, BufferMapCallback&& callback);
 	void setLabel(char const * label);
 	void unmap();
 	void reference();
@@ -1123,12 +1104,12 @@ HANDLE(Device)
 	CommandEncoder createCommandEncoder(const CommandEncoderDescriptor& descriptor);
 	CommandEncoder createCommandEncoder();
 	ComputePipeline createComputePipeline(const ComputePipelineDescriptor& descriptor);
-	NO_DISCARD std::unique_ptr<CreateComputePipelineAsyncCallback> createComputePipelineAsync(const ComputePipelineDescriptor& descriptor, CreateComputePipelineAsyncCallback&& callback);
+	std::unique_ptr<CreateComputePipelineAsyncCallback> createComputePipelineAsync(const ComputePipelineDescriptor& descriptor, CreateComputePipelineAsyncCallback&& callback);
 	PipelineLayout createPipelineLayout(const PipelineLayoutDescriptor& descriptor);
 	QuerySet createQuerySet(const QuerySetDescriptor& descriptor);
 	RenderBundleEncoder createRenderBundleEncoder(const RenderBundleEncoderDescriptor& descriptor);
 	RenderPipeline createRenderPipeline(const RenderPipelineDescriptor& descriptor);
-	NO_DISCARD std::unique_ptr<CreateRenderPipelineAsyncCallback> createRenderPipelineAsync(const RenderPipelineDescriptor& descriptor, CreateRenderPipelineAsyncCallback&& callback);
+	std::unique_ptr<CreateRenderPipelineAsyncCallback> createRenderPipelineAsync(const RenderPipelineDescriptor& descriptor, CreateRenderPipelineAsyncCallback&& callback);
 	Sampler createSampler(const SamplerDescriptor& descriptor);
 	Sampler createSampler();
 	ShaderModule createShaderModule(const ShaderModuleDescriptor& descriptor);
@@ -1139,10 +1120,10 @@ HANDLE(Device)
 	Bool getLimits(SupportedLimits * limits);
 	Queue getQueue();
 	Bool hasFeature(FeatureName feature);
-	NO_DISCARD std::unique_ptr<ErrorCallback> popErrorScope(ErrorCallback&& callback);
+	std::unique_ptr<ErrorCallback> popErrorScope(ErrorCallback&& callback);
 	void pushErrorScope(ErrorFilter filter);
 	void setLabel(char const * label);
-	NO_DISCARD std::unique_ptr<ErrorCallback> setUncapturedErrorCallback(ErrorCallback&& callback);
+	std::unique_ptr<ErrorCallback> setUncapturedErrorCallback(ErrorCallback&& callback);
 	void reference();
 	void release();
 END
@@ -1151,7 +1132,7 @@ HANDLE(Instance)
 	Surface createSurface(const SurfaceDescriptor& descriptor);
 	Bool hasWGSLLanguageFeature(WGSLFeatureName feature);
 	void processEvents();
-	NO_DISCARD std::unique_ptr<RequestAdapterCallback> requestAdapter(const RequestAdapterOptions& options, RequestAdapterCallback&& callback);
+	std::unique_ptr<RequestAdapterCallback> requestAdapter(const RequestAdapterOptions& options, RequestAdapterCallback&& callback);
 	void reference();
 	void release();
 	Adapter requestAdapter(const RequestAdapterOptions& options);
@@ -1173,7 +1154,7 @@ HANDLE(QuerySet)
 END
 
 HANDLE(Queue)
-	NO_DISCARD std::unique_ptr<QueueWorkDoneCallback> onSubmittedWorkDone(QueueWorkDoneCallback&& callback);
+	std::unique_ptr<QueueWorkDoneCallback> onSubmittedWorkDone(QueueWorkDoneCallback&& callback);
 	void setLabel(char const * label);
 	void submit(size_t commandCount, CommandBuffer const * commands);
 	void submit(const std::vector<WGPUCommandBuffer>& commands);
@@ -1255,7 +1236,7 @@ HANDLE(Sampler)
 END
 
 HANDLE(ShaderModule)
-	NO_DISCARD std::unique_ptr<CompilationInfoCallback> getCompilationInfo(CompilationInfoCallback&& callback);
+	std::unique_ptr<CompilationInfoCallback> getCompilationInfo(CompilationInfoCallback&& callback);
 	void setLabel(char const * label);
 	void reference();
 	void release();
@@ -1417,38 +1398,37 @@ void InstanceFeatures::setDefault() {
 
 // Methods of Limits
 void Limits::setDefault() {
-	maxTextureDimension1D = WGPU_LIMIT_U32_UNDEFINED;
-	maxTextureDimension2D = WGPU_LIMIT_U32_UNDEFINED;
-	maxTextureDimension3D = WGPU_LIMIT_U32_UNDEFINED;
-	maxTextureArrayLayers = WGPU_LIMIT_U32_UNDEFINED;
-	maxBindGroups = WGPU_LIMIT_U32_UNDEFINED;
-	maxBindGroupsPlusVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
-	maxBindingsPerBindGroup = WGPU_LIMIT_U32_UNDEFINED;
-	maxDynamicUniformBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
-	maxDynamicStorageBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
-	maxSampledTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	maxSamplersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	maxStorageBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	maxStorageTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	maxUniformBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	maxUniformBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
-	maxStorageBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
-	minUniformBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
-	minStorageBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
-	maxVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
-	maxBufferSize = WGPU_LIMIT_U64_UNDEFINED;
-	maxVertexAttributes = WGPU_LIMIT_U32_UNDEFINED;
-	maxVertexBufferArrayStride = WGPU_LIMIT_U32_UNDEFINED;
-	maxInterStageShaderComponents = WGPU_LIMIT_U32_UNDEFINED;
-	maxInterStageShaderVariables = WGPU_LIMIT_U32_UNDEFINED;
-	maxColorAttachments = WGPU_LIMIT_U32_UNDEFINED;
-	maxColorAttachmentBytesPerSample = WGPU_LIMIT_U32_UNDEFINED;
-	maxComputeWorkgroupStorageSize = WGPU_LIMIT_U32_UNDEFINED;
-	maxComputeInvocationsPerWorkgroup = WGPU_LIMIT_U32_UNDEFINED;
-	maxComputeWorkgroupSizeX = WGPU_LIMIT_U32_UNDEFINED;
-	maxComputeWorkgroupSizeY = WGPU_LIMIT_U32_UNDEFINED;
-	maxComputeWorkgroupSizeZ = WGPU_LIMIT_U32_UNDEFINED;
-	maxComputeWorkgroupsPerDimension = WGPU_LIMIT_U32_UNDEFINED;
+	maxTextureDimension1D = 0;
+	maxTextureDimension2D = 0;
+	maxTextureDimension3D = 0;
+	maxTextureArrayLayers = 0;
+	maxBindGroups = 0;
+	maxBindingsPerBindGroup = 0;
+	maxDynamicUniformBuffersPerPipelineLayout = 0;
+	maxDynamicStorageBuffersPerPipelineLayout = 0;
+	maxSampledTexturesPerShaderStage = 0;
+	maxSamplersPerShaderStage = 0;
+	maxStorageBuffersPerShaderStage = 0;
+	maxStorageTexturesPerShaderStage = 0;
+	maxUniformBuffersPerShaderStage = 0;
+	maxUniformBufferBindingSize = 0;
+	maxStorageBufferBindingSize = 0;
+	minUniformBufferOffsetAlignment = 64;
+	minStorageBufferOffsetAlignment = 16;
+	maxVertexBuffers = 0;
+	maxBufferSize = 0;
+	maxVertexAttributes = 0;
+	maxVertexBufferArrayStride = 0;
+	maxInterStageShaderComponents = 0;
+	maxInterStageShaderVariables = 0;
+	maxColorAttachments = 0;
+	maxColorAttachmentBytesPerSample = 0;
+	maxComputeWorkgroupStorageSize = 0;
+	maxComputeInvocationsPerWorkgroup = 0;
+	maxComputeWorkgroupSizeX = 0;
+	maxComputeWorkgroupSizeY = 0;
+	maxComputeWorkgroupSizeZ = 0;
+	maxComputeWorkgroupsPerDimension = 0;
 }
 
 

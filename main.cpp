@@ -83,7 +83,7 @@ bool Renderer::Initialize() {
 
     // device
     DeviceDescriptor devDesc = {};
-    devDesc.deviceLostCallbackInfo.callback = [](const WGPUDevice* /* device */, WGPUDeviceLostReason reason, char const* message, void* /* pUserData */) {
+    devDesc.deviceLostCallback = [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */) {
         std::cout << "Device lost: reason " << reason;
         if (message) std::cout << " (" << message << ")";
         std::cout << std::endl;
@@ -133,7 +133,26 @@ void Renderer::Terminate(){
 }
 void Renderer::MainLoop(){
     glfwPollEvents();
-    auto [ surfaceTexture, targetView ] = GetNextSurfaceViewData();
+    SurfaceTexture surfaceTexture;
+    surface->getCurrentTexture(&surfaceTexture);
+    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) {
+        printf("Could not get surface texture.");
+        return;
+    }
+    // surface texture view
+    TextureViewDescriptor viewDescriptor;
+    viewDescriptor.nextInChain = nullptr;
+    viewDescriptor.label = "Surface texture view";
+    Texture tex = Texture(surfaceTexture.texture);
+    viewDescriptor.format = tex.getFormat();
+    viewDescriptor.dimension = WGPUTextureViewDimension_2D;
+    viewDescriptor.baseMipLevel = 0;
+    viewDescriptor.mipLevelCount = 1;
+    viewDescriptor.baseArrayLayer = 0;
+    viewDescriptor.arrayLayerCount = 1;
+    viewDescriptor.aspect = WGPUTextureAspect_All;
+    //TextureView targetView = tex->createView(viewDescriptor);
+    raii::TextureView targetView = tex.createView(viewDescriptor);
     if (!targetView) return;
     RenderPassDescriptor renderPassDesc = {};
     renderPassDesc.nextInChain = nullptr;
@@ -144,7 +163,7 @@ void Renderer::MainLoop(){
     renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
     renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
     renderPassColorAttachment.clearValue = Color{ 0.6, 0.4, 1.0, 1.0 };
-    renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+    //renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
     renderPassDesc.colorAttachmentCount = 1;
     renderPassDesc.colorAttachments = &renderPassColorAttachment;
     renderPassDesc.depthStencilAttachment = nullptr;
@@ -171,40 +190,17 @@ void Renderer::MainLoop(){
 bool Renderer::IsRunning(){
     return !glfwWindowShouldClose(window);
 }
-std::pair<SurfaceTexture, raii::TextureView> Renderer::GetNextSurfaceViewData() {
-    // next texture
-    SurfaceTexture surfaceTexture;
-    surface->getCurrentTexture(&surfaceTexture);
-    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) {
-        return { surfaceTexture, raii::TextureView() };
-    }
-    // surface texture view
-    TextureViewDescriptor viewDescriptor;
-    viewDescriptor.nextInChain = nullptr;
-    viewDescriptor.label = "Surface texture view";
-    raii::Texture tex = Texture(surfaceTexture.texture);
-    viewDescriptor.format = tex->getFormat();
-    viewDescriptor.dimension = WGPUTextureViewDimension_2D;
-    viewDescriptor.baseMipLevel = 0;
-    viewDescriptor.mipLevelCount = 1;
-    viewDescriptor.baseArrayLayer = 0;
-    viewDescriptor.arrayLayerCount = 1;
-    viewDescriptor.aspect = WGPUTextureAspect_All;
-    raii::TextureView targetView = tex->createView(viewDescriptor);
-    
-    return { surfaceTexture, targetView };
-}
 void Renderer::InitializeBuffers() {
     vertexData = {
-        {position:{+0.8, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}},
-        {position:{+0.4, +0.7},     color:{+0.5, +0.1, +0.3, +1.0}}, 
-        {position:{+0.4, +0.3},     color:{+0.5, +0.1, +0.1, +1.0}}, 
+        {position:{{+0.8, +0.7}},     color:{{+0.3, +0.1, +0.1, +1.0}}},
+        {position:{{+0.4, +0.7}},     color:{{+0.5, +0.1, +0.3, +1.0}}}, 
+        {position:{{-0.4, -0.3}},     color:{{+0.5, +0.1, +0.1, +1.0}}}, 
 
-        {position:{+0.8, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}}, 
-        {position:{+0.8, +0.3},     color:{+0.0, +0.1, +0.1, +1.0}}, 
-        {position:{+0.4, +0.3},     color:{+0.5, +0.1, +0.1, +1.0}}, 
+        {position:{{+0.8, +0.7}},     color:{{+0.3, +0.1, +0.1, +1.0}}}, 
+        {position:{{+0.8, -0.3}},     color:{{+0.0, +0.1, +0.1, +1.0}}}, 
+        {position:{{-0.4, -0.3}},     color:{{+0.5, +0.1, +0.1, +1.0}}}, 
 
-        {position:{-0.1, +0.7},     color:{+0.3, +0.1, +0.1, +1.0}},
+        {position:{{-0.1, +0.7}},     color:{{+0.3, +0.1, +0.1, +1.0}}},
     };
     vertexCount = static_cast<int>(vertexData.size());
 
