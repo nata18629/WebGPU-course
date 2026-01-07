@@ -52,12 +52,17 @@ private:
     raii::Queue queue;
     raii::RenderPipeline pipeline;
     TextureFormat surfaceFormat = TextureFormat::Undefined;
-    raii::Buffer vertexBuffer, indexBuffer;
+    raii::Buffer vertexBuffer, indexBuffer, uniformBuffer;
     std::vector<VertexData> vertexData;
     std::vector<uint32_t> indexData;
     uint32_t vertexCount, indexCount;
+    raii::BindGroupLayout bindGroupLayout;
+    raii::BindGroup bindGroup;
+    raii::PipelineLayout layout;
 
     void InitializeBuffers();
+    void InitializeUniforms();
+    void InitializeBindings();
     void InitializePipeline();
     std::pair<SurfaceTexture, raii::TextureView> GetNextSurfaceViewData();
 };
@@ -124,6 +129,8 @@ bool Renderer::Initialize() {
     // queue
     queue = device->getQueue();
     InitializeBuffers();
+    // InitializeUniforms();
+    // InitializeBindings();
     InitializePipeline();
     return true;
 }
@@ -133,6 +140,9 @@ void Renderer::Terminate(){
 }
 void Renderer::MainLoop(){
     glfwPollEvents();
+    float t = static_cast<float>(glfwGetTime());
+    queue->writeBuffer(*uniformBuffer, 0, &t, sizeof(float));
+
     SurfaceTexture surfaceTexture;
     surface->getCurrentTexture(&surfaceTexture);
     if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success) {
@@ -176,6 +186,7 @@ void Renderer::MainLoop(){
     // render pass
     raii::RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
     renderPass->setPipeline(*pipeline);
+    renderPass->setBindGroup(0, *bindGroup, 0, nullptr);
     renderPass->setVertexBuffer(0, *vertexBuffer, 0, vertexBuffer->getSize());
     renderPass->setIndexBuffer(*indexBuffer, IndexFormat::Uint32, 0, indexBuffer->getSize());
     renderPass->drawIndexed(indexCount, 1, 0, 0, 0);
@@ -226,6 +237,42 @@ void Renderer::InitializeBuffers() {
     bufferDesc.mappedAtCreation = false;
     indexBuffer = device->createBuffer(bufferDesc);
     queue->writeBuffer(*indexBuffer, 0, indexData.data(), bufferDesc.size);
+}
+void Renderer::InitializeUniforms() {
+    BufferDescriptor bufferDesc;
+    bufferDesc.label = "uniform data";
+    bufferDesc.size = 4*sizeof(float);
+    bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+    bufferDesc.mappedAtCreation = false;
+    uniformBuffer = device->createBuffer(bufferDesc);
+    
+    float t = static_cast<float>(glfwGetTime());
+    queue->writeBuffer(*uniformBuffer, 0, &t, sizeof(float));
+}
+void Renderer::InitializeBindings() {
+    // The uniform time binding
+    BindGroupLayoutEntry bindGroupLayoutEntry = Default;
+    bindGroupLayoutEntry.binding = 0;
+    bindGroupLayoutEntry.visibility = ShaderStage::Vertex;
+    bindGroupLayoutEntry.buffer.type = BufferBindingType::Uniform;
+    bindGroupLayoutEntry.buffer.minBindingSize = 4*sizeof(float);
+
+    BindGroupLayoutDescriptor bindGroupLayoutDesc{};
+    bindGroupLayoutDesc.entryCount = 1;
+    bindGroupLayoutDesc.entries = &bindGroupLayoutEntry;
+    bindGroupLayout = device->createBindGroupLayout(bindGroupLayoutDesc);
+
+    BindGroupEntry binding;
+    binding.binding = 0;
+    binding.buffer = *uniformBuffer;
+    binding.offset = 0;
+    binding.size = 4*sizeof(float);
+    
+    BindGroupDescriptor bindGroupDesc;
+    bindGroupDesc.layout = *bindGroupLayout;
+    bindGroupDesc.entryCount = 1;
+    bindGroupDesc.entries = &binding;
+    bindGroup = device->createBindGroup(bindGroupDesc);
 }
 void Renderer::InitializePipeline(){
     // create shader module
@@ -289,7 +336,14 @@ void Renderer::InitializePipeline(){
     pipelineDesc.multisample.count = 1;
     pipelineDesc.multisample.mask = ~0u;
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
-    pipelineDesc.layout = nullptr;
+
+    PipelineLayoutDescriptor layoutDesc{};
+    layoutDesc.bindGroupLayoutCount = 1;
+    layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&(*bindGroupLayout);
+    layout = device->createPipelineLayout(layoutDesc);
+
+    pipelineDesc.layout = *layout;
+
 
     pipeline = device->createRenderPipeline(pipelineDesc);
 }
